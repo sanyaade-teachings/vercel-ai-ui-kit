@@ -22,12 +22,41 @@ function findAndHoistMetadata(obj: LanguageModelV1Message) {
   }
 }
 
+function deepCloneMessage(obj: any): any {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (obj instanceof URL) {
+    return new URL(obj.toString());
+  }
+
+  if (obj instanceof Uint8Array) {
+    return new Uint8Array(obj);
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => deepCloneMessage(item));
+  }
+
+  const clone: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      clone[key] = deepCloneMessage(obj[key]);
+    }
+  }
+  return clone;
+}
+
 export function convertToOpenAICompatibleChatMessages(
   prompt: LanguageModelV1Prompt,
 ): OpenAICompatibleChatPrompt {
   const messages: OpenAICompatibleChatPrompt = [];
-  prompt.map(message => findAndHoistMetadata(message));
-  for (const { role, content, ...rest } of prompt) {
+  // We can't use JSON.parse/stringify or structuredClone here as it doesn't
+  // gracefully handle all of the data types in the prompt.
+  const promptCopy = deepCloneMessage(prompt) as LanguageModelV1Prompt;
+  promptCopy.map(message => findAndHoistMetadata(message));
+  for (const { role, content, ...rest } of promptCopy) {
     switch (role) {
       case 'system': {
         messages.push({ role: 'system', content, ...rest });
