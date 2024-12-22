@@ -120,7 +120,7 @@ describe('tool calls', () => {
   });
 });
 
-describe('metadata merging', () => {
+describe('provider-specific metadata merging', () => {
   it('should merge system message metadata', async () => {
     const result = convertToOpenAICompatibleChatMessages([
       {
@@ -295,9 +295,7 @@ describe('metadata merging', () => {
       },
     ]);
   });
-});
 
-describe('complex part-level transformations', () => {
   it('should handle a user message with multiple content parts (text + image)', () => {
     const result = convertToOpenAICompatibleChatMessages([
       {
@@ -466,9 +464,7 @@ describe('complex part-level transformations', () => {
       },
     ]);
   });
-});
 
-describe('additional permutations tests', () => {
   it('should handle multiple content parts with multiple metadata layers', () => {
     const result = convertToOpenAICompatibleChatMessages([
       {
