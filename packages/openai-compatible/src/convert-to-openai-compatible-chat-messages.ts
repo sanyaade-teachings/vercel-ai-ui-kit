@@ -26,20 +26,8 @@ export function convertToOpenAICompatibleChatMessages(
   prompt: LanguageModelV1Prompt,
 ): OpenAICompatibleChatPrompt {
   const messages: OpenAICompatibleChatPrompt = [];
-
-  console.log(`Original prompt: ${JSON.stringify(prompt, null, 2)}`);
-  // let promptCopy = { ...prompt };
-  for (let i = 0; i < prompt.length; i++) {
-    findAndHoistMetadata(prompt[i]);
-  }
-  console.log(`Prompt after hoisting: ${JSON.stringify(prompt, null, 2)}`);
-
+  prompt.map(message => findAndHoistMetadata(message));
   for (const { role, content, ...rest } of prompt) {
-
-    console.log(`Role: ${role}`);
-    console.log(`Content: ${JSON.stringify(content, null, 2)}`);
-    console.log(`Rest: ${JSON.stringify(rest, null, 2)}`);
-
     switch (role) {
       case 'system': {
         messages.push({ role: 'system', content, ...rest });
@@ -48,7 +36,6 @@ export function convertToOpenAICompatibleChatMessages(
 
       case 'user': {
         if (content.length === 1 && content[0].type === 'text') {
-          console.log('Single text part');
           const { text, type, ...contentRest } = content[0];
           messages.push({ role: 'user', content: text, ...rest, ...contentRest });
           break;
@@ -57,13 +44,9 @@ export function convertToOpenAICompatibleChatMessages(
         messages.push({
           role: 'user',
           content: content.map(part => {
-            // Intentionally throw away `...partRest` here as we handle including
-            // any remaining material within each case individually below.
-            const { type, ...partRest } = part;
-            switch (type) {
+            switch (part.type) {
               case 'text': {
-                const { type, text, ...textRest } = part;
-                return { type, text, ...textRest };
+                return { ...part };
               }
               case 'image': {
                 const { type, image, mimeType, ...imageRest } = part;
@@ -103,8 +86,10 @@ export function convertToOpenAICompatibleChatMessages(
         for (const part of content) {
           switch (part.type) {
             case 'text': {
-              // TODO: Check whether there are valid test cases here where we
-              // could lose information by not including `...rest`.
+              // We could be throwing away additional data here as we only
+              // incorporate `part.text`. However, it's not clear there are use
+              // cases requiring this, nor how we'd resolve/merge across
+              // potentially multiple text parts.
               text += part.text;
               break;
             }
