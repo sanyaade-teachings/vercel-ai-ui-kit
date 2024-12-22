@@ -428,7 +428,8 @@ describe('complex part-level transformations', () => {
     const result = convertToOpenAICompatibleChatMessages([
       {
         role: 'tool',
-        providerMetadata: { // this just gets omitted as we prioritize content-level metadata
+        providerMetadata: {
+          // this just gets omitted as we prioritize content-level metadata
           openaiCompatible: { responseTier: 'detailed' },
         },
         content: [

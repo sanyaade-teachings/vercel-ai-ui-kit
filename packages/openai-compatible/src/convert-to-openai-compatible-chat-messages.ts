@@ -6,7 +6,9 @@ import {
 import { convertUint8ArrayToBase64 } from '@ai-sdk/provider-utils';
 import { OpenAICompatibleChatPrompt } from './openai-compatible-api-types';
 
-function getOpenAIMetadata(message: { providerMetadata?: LanguageModelV1ProviderMetadata }) {
+function getOpenAIMetadata(message: {
+  providerMetadata?: LanguageModelV1ProviderMetadata;
+}) {
   return message?.providerMetadata?.openaiCompatible ?? {};
 }
 
@@ -24,7 +26,11 @@ export function convertToOpenAICompatibleChatMessages(
 
       case 'user': {
         if (content.length === 1 && content[0].type === 'text') {
-          messages.push({ role: 'user', content: content[0].text, ...getOpenAIMetadata(content[0]) });
+          messages.push({
+            role: 'user',
+            content: content[0].text,
+            ...getOpenAIMetadata(content[0]),
+          });
           break;
         }
 
@@ -43,8 +49,9 @@ export function convertToOpenAICompatibleChatMessages(
                     url:
                       part.image instanceof URL
                         ? part.image.toString()
-                        : `data:${part.mimeType ?? 'image/jpeg'
-                        };base64,${convertUint8ArrayToBase64(part.image)}`,
+                        : `data:${
+                            part.mimeType ?? 'image/jpeg'
+                          };base64,${convertUint8ArrayToBase64(part.image)}`,
                   },
                   ...partMetadata,
                 };
