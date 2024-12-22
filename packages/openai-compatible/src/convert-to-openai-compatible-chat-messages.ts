@@ -1,84 +1,44 @@
 import {
-  LanguageModelV1Message,
   LanguageModelV1Prompt,
+  LanguageModelV1ProviderMetadata,
   UnsupportedFunctionalityError,
 } from '@ai-sdk/provider';
 import { convertUint8ArrayToBase64 } from '@ai-sdk/provider-utils';
 import { OpenAICompatibleChatPrompt } from './openai-compatible-api-types';
 
-function findAndHoistMetadata(obj: LanguageModelV1Message) {
-  if (obj?.providerMetadata?.openaiCompatible) {
-    Object.assign(obj, obj.providerMetadata.openaiCompatible);
-    delete obj.providerMetadata.openaiCompatible;
-    if (Object.keys(obj.providerMetadata).length === 0) {
-      delete obj.providerMetadata;
-    }
-  }
-
-  if (Array.isArray(obj)) {
-    obj.forEach(item => findAndHoistMetadata(item));
-  } else if (obj && typeof obj === 'object') {
-    Object.values(obj).forEach(value => findAndHoistMetadata(value));
-  }
-}
-
-function deepCloneMessage(obj: any): any {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
-  }
-
-  if (obj instanceof URL) {
-    return new URL(obj.toString());
-  }
-
-  if (obj instanceof Uint8Array) {
-    return new Uint8Array(obj);
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map(item => deepCloneMessage(item));
-  }
-
-  const clone: any = {};
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      clone[key] = deepCloneMessage(obj[key]);
-    }
-  }
-  return clone;
+function getOpenAIMetadata(message: { providerMetadata?: LanguageModelV1ProviderMetadata }) {
+  return message?.providerMetadata?.openaiCompatible ?? {};
 }
 
 export function convertToOpenAICompatibleChatMessages(
   prompt: LanguageModelV1Prompt,
 ): OpenAICompatibleChatPrompt {
   const messages: OpenAICompatibleChatPrompt = [];
-  // We can't use JSON.parse/stringify or structuredClone here as it doesn't
-  // gracefully handle all of the data types in the prompt.
-  const promptCopy = deepCloneMessage(prompt) as LanguageModelV1Prompt;
-  promptCopy.map(message => findAndHoistMetadata(message));
-  for (const { role, content, ...rest } of promptCopy) {
+  for (const message of prompt) {
+    const metadata = getOpenAIMetadata(message);
+    const { role, content } = message;
     switch (role) {
       case 'system': {
-        messages.push({ role: 'system', content, ...rest });
+        messages.push({ role: 'system', content, ...metadata });
         break;
       }
 
       case 'user': {
         if (content.length === 1 && content[0].type === 'text') {
-          const { text, type, ...contentRest } = content[0];
-          messages.push({ role: 'user', content: text, ...rest, ...contentRest });
+          messages.push({ role: 'user', content: content[0].text, ...getOpenAIMetadata(content[0]) });
           break;
         }
 
         messages.push({
           role: 'user',
           content: content.map(part => {
+            const partMetadata = getOpenAIMetadata(part);
             switch (part.type) {
               case 'text': {
-                return { ...part };
+                return { type: 'text', text: part.text, ...partMetadata };
               }
               case 'image': {
-                const { type, image, mimeType, ...imageRest } = part;
+                const { image, mimeType } = part;
                 return {
                   type: 'image_url',
                   image_url: {
@@ -88,7 +48,7 @@ export function convertToOpenAICompatibleChatMessages(
                         : `data:${mimeType ?? 'image/jpeg'
                         };base64,${convertUint8ArrayToBase64(image)}`,
                   },
-                  ...imageRest,
+                  ...partMetadata,
                 };
               }
               case 'file': {
@@ -98,7 +58,7 @@ export function convertToOpenAICompatibleChatMessages(
               }
             }
           }),
-          ...rest,
+          ...metadata,
         });
 
         break;
@@ -113,17 +73,17 @@ export function convertToOpenAICompatibleChatMessages(
         }> = [];
 
         for (const part of content) {
+          const partMetadata = getOpenAIMetadata(part);
           switch (part.type) {
             case 'text': {
               // We could be throwing away additional data here as we only
-              // incorporate `part.text`. However, it's not clear there are use
-              // cases requiring this, nor how we'd resolve/merge across
-              // potentially multiple text parts.
+              // incorporate `part.text`. However, use cases aren't clear, nor
+              // how we'd resolve/merge across potentially multiple parts.
               text += part.text;
               break;
             }
             case 'tool-call': {
-              const { type, toolCallId, toolName, args, ...toolCallRest } = part;
+              const { toolCallId, toolName, args } = part;
               toolCalls.push({
                 id: toolCallId,
                 type: 'function',
@@ -131,7 +91,7 @@ export function convertToOpenAICompatibleChatMessages(
                   name: toolName,
                   arguments: JSON.stringify(args),
                 },
-                ...toolCallRest,
+                ...partMetadata,
               });
               break;
             }
@@ -146,7 +106,7 @@ export function convertToOpenAICompatibleChatMessages(
           role: 'assistant',
           content: text,
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
-          ...rest,
+          ...metadata,
         });
 
         break;
@@ -154,13 +114,13 @@ export function convertToOpenAICompatibleChatMessages(
 
       case 'tool': {
         for (const toolResponse of content) {
-          const { type, content, toolCallId, toolName, result, ...toolResponseRest } = toolResponse;
+          const { toolCallId, result } = toolResponse;
+          const toolResponseMetadata = getOpenAIMetadata(toolResponse);
           messages.push({
             role: 'tool',
             tool_call_id: toolCallId,
             content: JSON.stringify(result),
-            ...toolResponseRest,
-            ...rest,
+            ...toolResponseMetadata,
           });
         }
         break;
