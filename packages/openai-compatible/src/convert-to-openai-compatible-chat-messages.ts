@@ -14,9 +14,8 @@ export function convertToOpenAICompatibleChatMessages(
   prompt: LanguageModelV1Prompt,
 ): OpenAICompatibleChatPrompt {
   const messages: OpenAICompatibleChatPrompt = [];
-  for (const message of prompt) {
-    const metadata = getOpenAIMetadata(message);
-    const { role, content } = message;
+  for (const { role, content, ...message } of prompt) {
+    const metadata = getOpenAIMetadata({ ...message });
     switch (role) {
       case 'system': {
         messages.push({ role: 'system', content, ...metadata });
@@ -38,15 +37,14 @@ export function convertToOpenAICompatibleChatMessages(
                 return { type: 'text', text: part.text, ...partMetadata };
               }
               case 'image': {
-                const { image, mimeType } = part;
                 return {
                   type: 'image_url',
                   image_url: {
                     url:
-                      image instanceof URL
-                        ? image.toString()
-                        : `data:${mimeType ?? 'image/jpeg'
-                        };base64,${convertUint8ArrayToBase64(image)}`,
+                      part.image instanceof URL
+                        ? part.image.toString()
+                        : `data:${part.mimeType ?? 'image/jpeg'
+                        };base64,${convertUint8ArrayToBase64(part.image)}`,
                   },
                   ...partMetadata,
                 };
@@ -76,20 +74,16 @@ export function convertToOpenAICompatibleChatMessages(
           const partMetadata = getOpenAIMetadata(part);
           switch (part.type) {
             case 'text': {
-              // We could be throwing away additional data here as we only
-              // incorporate `part.text`. However, use cases aren't clear, nor
-              // how we'd resolve/merge across potentially multiple parts.
               text += part.text;
               break;
             }
             case 'tool-call': {
-              const { toolCallId, toolName, args } = part;
               toolCalls.push({
-                id: toolCallId,
+                id: part.toolCallId,
                 type: 'function',
                 function: {
-                  name: toolName,
-                  arguments: JSON.stringify(args),
+                  name: part.toolName,
+                  arguments: JSON.stringify(part.args),
                 },
                 ...partMetadata,
               });
@@ -114,12 +108,11 @@ export function convertToOpenAICompatibleChatMessages(
 
       case 'tool': {
         for (const toolResponse of content) {
-          const { toolCallId, result } = toolResponse;
           const toolResponseMetadata = getOpenAIMetadata(toolResponse);
           messages.push({
             role: 'tool',
-            tool_call_id: toolCallId,
-            content: JSON.stringify(result),
+            tool_call_id: toolResponse.toolCallId,
+            content: JSON.stringify(toolResponse.result),
             ...toolResponseMetadata,
           });
         }
